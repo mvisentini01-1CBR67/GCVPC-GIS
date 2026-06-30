@@ -1,0 +1,2375 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Protezione Civile • Dashboard Operativa Georeferenziata</title>
+  <meta name="description" content="Dashboard operativa per la gestione georeferenziata delle squadre di protezione civile con mappa, log CSV, archivio squadre e pianificazione missioni." />
+
+  <!-- Google Fonts -->
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700;800&family=Space+Grotesk:wght@500;700&display=swap" rel="stylesheet" />
+
+  <!-- Leaflet CSS -->
+  <link
+    rel="stylesheet"
+    href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"
+    crossorigin=""
+  />
+  <!-- Leaflet Routing Machine CSS -->
+  <link
+    rel="stylesheet"
+    href="https://unpkg.com/leaflet-routing-machine@3.2.12/dist/leaflet-routing-machine.css"
+  />
+
+  <style>
+    :root {
+      --bg: #edf2ec;
+      --bg-2: #e4ebdf;
+      --panel: rgba(252, 254, 251, 0.78);
+      --panel-strong: rgba(255, 255, 255, 0.9);
+      --line: rgba(23, 41, 28, 0.12);
+      --text: #17291c;
+      --muted: #516356;
+      --deep: #0f1f16;
+      --accent: #2f6b3e;
+      --accent-2: #84a94b;
+      --warn: #a05a1f;
+      --danger: #8d2f2f;
+      --info: #245c77;
+      --shadow: 0 18px 48px rgba(21, 38, 24, 0.11);
+      --radius-xl: 28px;
+      --radius-lg: 20px;
+      --radius-md: 14px;
+      --radius-sm: 10px;
+      --max: 1500px;
+      --header-h: 78px;
+    }
+
+    * {
+      box-sizing: border-box;
+    }
+    html {
+      scroll-behavior: smooth;
+    }
+    body {
+      margin: 0;
+      font-family: "Manrope", sans-serif;
+      color: var(--text);
+      background: radial-gradient(circle at 12% 18%, rgba(132, 169, 75, 0.16), transparent 0 24%),
+        radial-gradient(circle at 88% 8%, rgba(47, 107, 62, 0.12), transparent 0 22%),
+        linear-gradient(180deg, var(--bg), var(--bg-2));
+      min-height: 100vh;
+      overflow-x: hidden;
+    }
+
+    body::before {
+      content: "";
+      position: fixed;
+      inset: 0;
+      pointer-events: none;
+      opacity: 0.4;
+      background-image: linear-gradient(rgba(23, 41, 28, 0.028) 1px, transparent 1px),
+        linear-gradient(90deg, rgba(23, 41, 28, 0.028) 1px, transparent 1px);
+      background-size: 32px 32px;
+      mask-image: linear-gradient(180deg, rgba(0, 0, 0, 0.45), rgba(0, 0, 0, 0.08));
+    }
+
+    a {
+      color: inherit;
+      text-decoration: none;
+    }
+    button,
+    input,
+    select,
+    textarea {
+      font: inherit;
+    }
+    img {
+      max-width: 100%;
+    }
+
+    .app {
+      width: min(100%, var(--max));
+      margin-inline: auto;
+      padding: 22px;
+    }
+
+    .topbar {
+      position: sticky;
+      top: 14px;
+      z-index: 60;
+      display: grid;
+      grid-template-columns: 1.5fr auto;
+      gap: 16px;
+      align-items: center;
+      padding: 16px 18px;
+      border: 1px solid var(--line);
+      border-radius: 24px;
+      background: rgba(250, 252, 248, 0.76);
+      backdrop-filter: blur(16px) saturate(1.15);
+      box-shadow: var(--shadow);
+      animation: revealUp 0.7s ease both;
+    }
+
+    .brand {
+      display: flex;
+      align-items: center;
+      gap: 14px;
+      min-width: 0;
+    }
+
+    .brand-mark {
+      width: 48px;
+      height: 48px;
+      border-radius: 16px;
+      position: relative;
+      background: linear-gradient(145deg, #2f6b3e, #4a7f45 55%, #84a94b);
+      box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.35), 0 12px 24px rgba(47, 107, 62, 0.18);
+      overflow: hidden;
+      flex: 0 0 auto;
+    }
+
+    .brand-mark::before,
+    .brand-mark::after {
+      content: "";
+      position: absolute;
+      inset: auto;
+      background: rgba(255, 255, 255, 0.9);
+    }
+
+    .brand-mark::before {
+      width: 24px;
+      height: 6px;
+      left: 12px;
+      top: 21px;
+      border-radius: 6px;
+    }
+    .brand-mark::after {
+      width: 6px;
+      height: 24px;
+      left: 21px;
+      top: 12px;
+      border-radius: 6px;
+    }
+
+    .brand h1 {
+      margin: 0;
+      font-family: "Space Grotesk", sans-serif;
+      font-size: clamp(1.05rem, 2vw, 1.45rem);
+      letter-spacing: -0.03em;
+      line-height: 1;
+    }
+
+    .brand p {
+      margin: 4px 0 0;
+      color: var(--muted);
+      font-size: 0.92rem;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+
+    .top-actions {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 10px;
+      justify-content: flex-end;
+    }
+
+    .nav-btn,
+    .btn {
+      appearance: none;
+      border: none;
+      cursor: pointer;
+      border-radius: 999px;
+      padding: 12px 16px;
+      font-weight: 700;
+      letter-spacing: -0.015em;
+      transition: transform 0.2s ease, box-shadow 0.2s ease, background 0.2s ease, color 0.2s ease, border-color 0.2s ease;
+    }
+
+    .nav-btn {
+      background: rgba(255, 255, 255, 0.65);
+      border: 1px solid var(--line);
+      color: var(--text);
+    }
+
+    .nav-btn:hover,
+    .btn:hover {
+      transform: translateY(-2px);
+      box-shadow: 0 10px 22px rgba(18, 31, 21, 0.12);
+    }
+
+    .nav-btn.active {
+      background: linear-gradient(135deg, var(--deep), #223b2a);
+      color: #f6f9f4;
+      border-color: transparent;
+    }
+
+    .btn-primary {
+      background: linear-gradient(135deg, var(--accent), #3f7d47);
+      color: white;
+      box-shadow: 0 14px 28px rgba(47, 107, 62, 0.2);
+    }
+
+    .btn-secondary {
+      background: rgba(255, 255, 255, 0.72);
+      color: var(--text);
+      border: 1px solid var(--line);
+    }
+
+    .btn-warn {
+      background: linear-gradient(135deg, #8f5322, var(--warn));
+      color: #fff;
+    }
+
+    .btn-danger {
+      background: linear-gradient(135deg, #7d2525, var(--danger));
+      color: #fff;
+    }
+
+    .hero {
+      margin-top: 18px;
+      display: grid;
+      grid-template-columns: 1.3fr 0.7fr;
+      gap: 18px;
+      align-items: stretch;
+    }
+
+    .hero-panel,
+    .panel {
+      position: relative;
+      border: 1px solid var(--line);
+      border-radius: var(--radius-xl);
+      background: var(--panel);
+      backdrop-filter: blur(16px);
+      box-shadow: var(--shadow);
+      overflow: hidden;
+    }
+
+    .hero-copy {
+      padding: clamp(24px, 4vw, 42px);
+      min-height: 280px;
+      display: flex;
+      flex-direction: column;
+      justify-content: space-between;
+    }
+
+    .eyebrow {
+      display: inline-flex;
+      align-items: center;
+      gap: 10px;
+      padding: 8px 12px;
+      border-radius: 999px;
+      background: rgba(47, 107, 62, 0.08);
+      border: 1px solid rgba(47, 107, 62, 0.12);
+      color: var(--accent);
+      font-size: 0.85rem;
+      font-weight: 800;
+      width: max-content;
+      text-transform: uppercase;
+      letter-spacing: 0.08em;
+    }
+
+    .hero h2 {
+      margin: 16px 0 12px;
+      max-width: 16ch;
+      font-family: "Space Grotesk", sans-serif;
+      font-size: clamp(2rem, 4.8vw, 4.8rem);
+      line-height: 0.95;
+      letter-spacing: -0.06em;
+    }
+
+    .hero p {
+      margin: 0;
+      max-width: 60ch;
+      color: var(--muted);
+      font-size: clamp(1rem, 1.35vw, 1.1rem);
+    }
+
+    .hero-metrics {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 12px;
+      margin-top: 26px;
+    }
+
+    .metric {
+      padding: 16px 16px 18px;
+      background: rgba(255, 255, 255, 0.52);
+      border: 1px solid rgba(23, 41, 28, 0.08);
+      border-radius: 18px;
+    }
+
+    .metric strong {
+      display: block;
+      font-size: clamp(1.45rem, 2vw, 2rem);
+      letter-spacing: -0.04em;
+      line-height: 1;
+      font-family: "Space Grotesk", sans-serif;
+    }
+
+    .metric span {
+      display: block;
+      margin-top: 6px;
+      color: var(--muted);
+      font-size: 0.9rem;
+    }
+
+    .hero-side {
+      padding: 24px;
+      display: grid;
+      gap: 14px;
+      align-content: space-between;
+      background: radial-gradient(circle at 88% 12%, rgba(132, 169, 75, 0.18), transparent 0 28%),
+        linear-gradient(160deg, rgba(255, 255, 255, 0.7), rgba(241, 246, 238, 0.84));
+    }
+
+    .status-strip {
+      display: grid;
+      gap: 10px;
+    }
+
+    .status-item {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding: 13px 14px;
+      border-radius: 16px;
+      background: rgba(255, 255, 255, 0.62);
+      border: 1px solid rgba(23, 41, 28, 0.08);
+    }
+
+    .status-item small {
+      color: var(--muted);
+      display: block;
+      margin-top: 2px;
+    }
+
+    .status-badge {
+      padding: 8px 10px;
+      border-radius: 999px;
+      font-size: 0.82rem;
+      font-weight: 800;
+      background: rgba(47, 107, 62, 0.12);
+      color: var(--accent);
+      white-space: nowrap;
+    }
+
+    .page {
+      display: none;
+      margin-top: 18px;
+      animation: fadePage 0.35s ease;
+    }
+
+    .page.active {
+      display: block;
+    }
+
+    .grid-main {
+      display: grid;
+      grid-template-columns: 1.05fr 0.95fr;
+      gap: 18px;
+    }
+
+    .stack {
+      display: grid;
+      gap: 18px;
+    }
+
+    .panel-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: flex-start;
+      gap: 16px;
+      padding: 22px 22px 0;
+    }
+
+    .panel-header h3 {
+      margin: 0;
+      font-family: "Space Grotesk", sans-serif;
+      font-size: clamp(1.2rem, 2vw, 1.7rem);
+      letter-spacing: -0.04em;
+    }
+
+    .panel-header p {
+      margin: 6px 0 0;
+      color: var(--muted);
+      max-width: 58ch;
+      font-size: 0.95rem;
+    }
+
+    .panel-body {
+      padding: 22px;
+    }
+
+    .form-grid {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 14px;
+    }
+
+    .field {
+      display: grid;
+      gap: 8px;
+    }
+
+    .field.full {
+      grid-column: 1/-1;
+    }
+    .field label {
+      font-size: 0.86rem;
+      font-weight: 800;
+      letter-spacing: 0.02em;
+      text-transform: uppercase;
+      color: var(--muted);
+    }
+
+    input,
+    select,
+    textarea {
+      width: 100%;
+      border: 1px solid rgba(23, 41, 28, 0.12);
+      background: rgba(255, 255, 255, 0.8);
+      color: var(--text);
+      border-radius: 14px;
+      padding: 14px 14px;
+      outline: none;
+      transition: border-color 0.2s ease, box-shadow 0.2s ease, transform 0.2s ease;
+    }
+
+    textarea {
+      min-height: 104px;
+      resize: vertical;
+    }
+    input:focus,
+    select:focus,
+    textarea:focus {
+      border-color: rgba(47, 107, 62, 0.4);
+      box-shadow: 0 0 0 4px rgba(47, 107, 62, 0.1);
+    }
+
+    .inline-actions {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 10px;
+      margin-top: 18px;
+    }
+
+    .list-shell {
+      padding: 0 22px 22px;
+    }
+
+    .squad-list {
+      display: grid;
+      gap: 12px;
+    }
+
+    .squad-item {
+      padding: 18px;
+      border-radius: 20px;
+      background: rgba(255, 255, 255, 0.65);
+      border: 1px solid rgba(23, 41, 28, 0.08);
+      display: grid;
+      grid-template-columns: 1fr auto;
+      gap: 14px;
+      align-items: flex-start;
+      transition: transform 0.2s ease, box-shadow 0.2s ease;
+    }
+
+    .squad-item:hover {
+      transform: translateY(-3px);
+      box-shadow: 0 14px 28px rgba(16, 26, 18, 0.08);
+    }
+
+    .squad-title {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 10px;
+      align-items: center;
+      margin-bottom: 8px;
+    }
+
+    .squad-title h4 {
+      margin: 0;
+      font-size: 1.08rem;
+      font-family: "Space Grotesk", sans-serif;
+      letter-spacing: -0.03em;
+    }
+
+    .tag {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      padding: 6px 10px;
+      border-radius: 999px;
+      background: rgba(47, 107, 62, 0.1);
+      color: var(--accent);
+      font-size: 0.78rem;
+      font-weight: 800;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+    }
+
+    .squad-meta {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 8px 14px;
+      color: var(--muted);
+      font-size: 0.92rem;
+    }
+
+    .squad-meta strong {
+      color: var(--text);
+    }
+
+    .item-actions {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+      justify-content: flex-end;
+    }
+
+    .mini-btn {
+      border: none;
+      cursor: pointer;
+      padding: 10px 12px;
+      border-radius: 12px;
+      font-weight: 800;
+      font-size: 0.84rem;
+      background: #fff;
+      border: 1px solid var(--line);
+      transition: all 0.2s ease;
+    }
+
+    .mini-btn:hover {
+      transform: translateY(-2px);
+    }
+    .mini-btn.green {
+      background: rgba(47, 107, 62, 0.1);
+      color: var(--accent);
+    }
+    .mini-btn.red {
+      background: rgba(141, 47, 47, 0.1);
+      color: var(--danger);
+    }
+    .mini-btn.blue {
+      background: rgba(36, 92, 119, 0.1);
+      color: var(--info);
+    }
+
+    .stats-row {
+      display: grid;
+      grid-template-columns: repeat(4, 1fr);
+      gap: 14px;
+      padding: 0 22px 22px;
+    }
+
+    .stat-block {
+      padding: 18px;
+      border-radius: 18px;
+      background: rgba(255, 255, 255, 0.58);
+      border: 1px solid rgba(23, 41, 28, 0.08);
+    }
+
+    .stat-block strong {
+      display: block;
+      font-size: 1.8rem;
+      line-height: 1;
+      font-family: "Space Grotesk", sans-serif;
+      letter-spacing: -0.04em;
+    }
+
+    .stat-block span {
+      display: block;
+      margin-top: 6px;
+      color: var(--muted);
+      font-size: 0.9rem;
+    }
+
+    .csv-area {
+      width: 100%;
+      min-height: 360px;
+      font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+      font-size: 0.88rem;
+      line-height: 1.55;
+      background: #f9fcf7;
+    }
+
+    .log-list {
+      display: grid;
+      gap: 10px;
+      max-height: 540px;
+      overflow: auto;
+      padding-right: 4px;
+    }
+
+    .log-entry {
+      padding: 14px 15px;
+      border-radius: 16px;
+      background: rgba(255, 255, 255, 0.6);
+      border: 1px solid rgba(23, 41, 28, 0.08);
+    }
+
+    .log-entry strong {
+      display: block;
+      margin-bottom: 4px;
+      font-size: 0.95rem;
+    }
+
+    .log-entry span {
+      display: block;
+      color: var(--muted);
+      font-size: 0.86rem;
+      margin-bottom: 6px;
+    }
+
+    .map-layout {
+      display: grid;
+      grid-template-columns: 340px 1fr;
+      gap: 18px;
+      min-height: 74vh;
+    }
+
+    .map-sidebar {
+      display: grid;
+      gap: 18px;
+      align-content: start;
+    }
+
+    .layers {
+      display: grid;
+      gap: 10px;
+    }
+
+    .layer-toggle {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 12px;
+      padding: 12px 14px;
+      border-radius: 14px;
+      border: 1px solid rgba(23, 41, 28, 0.08);
+      background: rgba(255, 255, 255, 0.64);
+    }
+
+    .layer-toggle label {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      font-weight: 700;
+      color: var(--text);
+      text-transform: none;
+      letter-spacing: 0;
+      font-size: 0.95rem;
+    }
+
+    .layer-toggle input[type="checkbox"] {
+      width: 18px;
+      height: 18px;
+      accent-color: var(--accent);
+      padding: 0;
+    }
+
+    #map {
+      width: 100%;
+      height: 100%;
+      min-height: 740px;
+      border-radius: 28px;
+      overflow: hidden;
+      border: 1px solid var(--line);
+      box-shadow: var(--shadow);
+    }
+
+    .note {
+      color: var(--muted);
+      font-size: 0.88rem;
+      line-height: 1.5;
+    }
+
+    .empty {
+      padding: 22px;
+      border-radius: 18px;
+      border: 1px dashed rgba(23, 41, 28, 0.18);
+      color: var(--muted);
+      background: rgba(255, 255, 255, 0.42);
+    }
+
+    .reveal {
+      opacity: 0;
+      transform: translateY(18px);
+      transition: opacity 0.65s ease, transform 0.65s ease;
+    }
+
+    .reveal.visible {
+      opacity: 1;
+      transform: none;
+    }
+
+    .leaflet-popup-content-wrapper {
+      border-radius: 18px;
+      box-shadow: 0 18px 38px rgba(18, 31, 21, 0.18);
+    }
+
+    .popup-card {
+      min-width: 240px;
+      font-family: "Manrope", sans-serif;
+    }
+
+    .popup-card h4 {
+      margin: 0 0 8px;
+      font-family: "Space Grotesk", sans-serif;
+      font-size: 1.05rem;
+    }
+
+    .popup-card p {
+      margin: 4px 0;
+      font-size: 0.92rem;
+      color: #324438;
+    }
+
+    .popup-card strong {
+      color: #16261a;
+    }
+
+    .footer {
+      margin: 20px 0 10px;
+      padding: 18px 6px 6px;
+      text-align: center;
+      color: var(--muted);
+      font-size: 0.9rem;
+    }
+
+    @keyframes revealUp {
+      from {
+        opacity: 0;
+        transform: translateY(18px);
+      }
+      to {
+        opacity: 1;
+        transform: none;
+      }
+    }
+
+    @keyframes fadePage {
+      from {
+        opacity: 0;
+        transform: translateY(8px);
+      }
+      to {
+        opacity: 1;
+        transform: none;
+      }
+    }
+
+    @media (max-width: 1180px) {
+      .hero,
+      .grid-main,
+      .map-layout {
+        grid-template-columns: 1fr;
+      }
+      .map-sidebar {
+        order: -1;
+      }
+      #map {
+        min-height: 620px;
+      }
+    }
+
+    @media (max-width: 860px) {
+      .topbar {
+        grid-template-columns: 1fr;
+      }
+      .top-actions {
+        justify-content: flex-start;
+      }
+      .hero-metrics,
+      .stats-row,
+      .form-grid {
+        grid-template-columns: 1fr;
+      }
+      .squad-item {
+        grid-template-columns: 1fr;
+      }
+      .item-actions {
+        justify-content: flex-start;
+      }
+      .panel-header {
+        flex-direction: column;
+      }
+    }
+
+    @media (max-width: 560px) {
+      .app {
+        padding: 14px;
+      }
+      .topbar {
+        top: 8px;
+        border-radius: 20px;
+      }
+      .hero h2 {
+        max-width: 12ch;
+      }
+      .hero-copy,
+      .hero-side,
+      .panel-body,
+      .list-shell,
+      .panel-header,
+      .stats-row {
+        padding-left: 16px;
+        padding-right: 16px;
+      }
+      .panel {
+        border-radius: 22px;
+      }
+      #map {
+        min-height: 520px;
+        border-radius: 22px;
+      }
+      .nav-btn,
+      .btn {
+        width: 100%;
+        justify-content: center;
+      }
+      .top-actions {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+      }
+    }
+  </style>
+</head>
+<body>
+  <div class="app">
+    <header class="topbar">
+      <div class="brand">
+        <div class="brand-mark" aria-hidden="true"></div>
+        <div>
+          <h1>Dashboard Operativa • Protezione Civile</h1>
+          <p>Gestione squadre, archivio persistente, log CSV e mappa georeferenziata centrata su Finale Emilia</p>
+        </div>
+      </div>
+
+      <div class="top-actions" role="navigation" aria-label="Navigazione dashboard">
+        <button class="nav-btn active" data-page-target="page-dashboard">Dashboard</button>
+        <button class="nav-btn" data-page-target="page-genera">Genera Squadre</button>
+        <button class="nav-btn" data-page-target="page-log">Log CSV</button>
+        <button class="nav-btn" data-page-target="page-mappa">Mappa Operativa</button>
+      </div>
+    </header>
+
+    <section class="hero">
+      <div class="hero-panel reveal">
+        <div class="hero-copy">
+          <div>
+            <span class="eyebrow">Centro coordinamento locale</span>
+            <h2>Squadre, territorio, tempi di arrivo.</h2>
+            <p>
+              Una console unica per registrare squadre operative, memorizzare formazione, capisquadra, radio, mezzi e destinazioni,
+              generare un log cronologico in formato CSV e visualizzare ogni unità sulla mappa con percorso ottimale verso l’area di intervento.
+            </p>
+          </div>
+
+          <div class="hero-metrics">
+            <div class="metric">
+              <strong id="metricSquadre">0</strong>
+              <span>Squadre archiviate</span>
+            </div>
+            <div class="metric">
+              <strong id="metricOperatori">0</strong>
+              <span>Operatori registrati</span>
+            </div>
+            <div class="metric">
+              <strong id="metricLog">0</strong>
+              <span>Eventi di log</span>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div class="hero-panel hero-side reveal" style="transition-delay: 0.1s">
+        <div class="status-strip">
+          <div class="status-item">
+            <div>
+              <strong>Centro mappa</strong>
+              <small>Finale Emilia (MO)</small>
+            </div>
+            <div class="status-badge">44.8339, 11.2931</div>
+          </div>
+          <div class="status-item">
+            <div>
+              <strong>Persistenza locale</strong>
+              <small>Salvataggio automatico browser</small>
+            </div>
+            <div class="status-badge">ATTIVA</div>
+          </div>
+          <div class="status-item">
+            <div>
+              <strong>Esportazione</strong>
+              <small>CSV e backup JSON disponibili</small>
+            </div>
+            <div class="status-badge">PRONTA</div>
+          </div>
+        </div>
+
+        <div class="note">
+          Questa dashboard salva automaticamente dati di squadre, log e configurazioni nel browser tramite memoria locale.
+          Per un uso multiutente o centralizzato servirà poi collegarla a un backend reale.
+        </div>
+      </div>
+    </section>
+
+    <main>
+      <section id="page-dashboard" class="page active">
+        <div class="grid-main">
+          <div class="panel reveal">
+            <div class="panel-header">
+              <div>
+                <h3>Archivio squadre</h3>
+                <p>Visualizza e richiama in ogni momento tutte le squadre inserite con composizione, mezzi, radio, coordinate e destinazione.</p>
+              </div>
+              <button class="btn btn-secondary" id="btnBackupJson">Esporta backup JSON</button>
+            </div>
+
+            <div class="stats-row">
+              <div class="stat-block">
+                <strong id="statAttive">0</strong>
+                <span>Squadre attive</span>
+              </div>
+              <div class="stat-block">
+                <strong id="statMezzi">0</strong>
+                <span>Mezzi assegnati</span>
+              </div>
+              <div class="stat-block">
+                <strong id="statRadio">0</strong>
+                <span>Radio assegnate</span>
+              </div>
+              <div class="stat-block">
+                <strong id="statEtaMedia">0</strong>
+                <span>Minuti medi ETA</span>
+              </div>
+            </div>
+
+            <div class="list-shell">
+              <div id="squadList" class="squad-list"></div>
+            </div>
+          </div>
+
+          <div class="stack">
+            <div class="panel reveal" style="transition-delay: 0.08s">
+              <div class="panel-header">
+                <div>
+                  <h3>Richiamo rapido dati</h3>
+                  <p>Seleziona una squadra dall’archivio per ricaricare i dati nella pagina “Genera Squadre”.</p>
+                </div>
+              </div>
+              <div class="panel-body">
+                <div class="field">
+                  <label for="quickRecallSelect">Squadra salvata</label>
+                  <select id="quickRecallSelect"></select>
+                </div>
+                <div class="inline-actions">
+                  <button class="btn btn-primary" id="btnRecallToForm">Apri in Genera Squadre</button>
+                  <button class="btn btn-secondary" id="btnCenterSelectedOnMap">Centra in mappa</button>
+                </div>
+              </div>
+            </div>
+
+            <div class="panel reveal" style="transition-delay: 0.14s">
+              <div class="panel-header">
+                <div>
+                  <h3>Operazioni dati</h3>
+                  <p>Gestione completa di log e archivio locale.</p>
+                </div>
+              </div>
+              <div class="panel-body">
+                <div class="inline-actions">
+                  <button class="btn btn-secondary" id="btnExportCsvFromDashboard">Scarica log CSV</button>
+                  <button class="btn btn-warn" id="btnSeedDemo">Carica dati demo</button>
+                  <button class="btn btn-danger" id="btnClearAll">Azzera archivio locale</button>
+                </div>
+                <p class="note" style="margin-top: 14px">
+                  Il log CSV è generato automaticamente ad ogni creazione, aggiornamento, eliminazione, richiamo o assegnazione.
+                </p>
+              </div>
+            </div>
+
+            <div class="panel reveal" style="transition-delay: 0.18s">
+              <div class="panel-header">
+                <div>
+                  <h3>Ultime attività</h3>
+                  <p>Estratto cronologico delle azioni più recenti registrate nel sistema.</p>
+                </div>
+              </div>
+              <div class="panel-body">
+                <div id="recentLogs" class="log-list"></div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <section id="page-genera" class="page">
+        <div class="grid-main">
+          <div class="panel reveal">
+            <div class="panel-header">
+              <div>
+                <h3>Genera / modifica squadra</h3>
+                <p>Inserisci i dati operativi. Il salvataggio crea o aggiorna automaticamente l’archivio locale e registra un evento dettagliato nel log CSV.</p>
+              </div>
+              <div class="tag">Autosave locale</div>
+            </div>
+
+            <div class="panel-body">
+              <form id="squadForm">
+                <input type="hidden" id="editId" />
+
+                <div class="form-grid">
+                  <div class="field">
+                    <label for="teamName">Nome squadra</label>
+                    <input id="teamName" required placeholder="Es. Modulo Idraulico A1" />
+                  </div>
+
+                  <div class="field">
+                    <label for="teamColor">Colore segnalino</label>
+                    <select id="teamColor">
+                      <option value="red">Rosso</option>
+                      <option value="blue">Blu</option>
+                      <option value="green">Verde</option>
+                      <option value="orange">Arancione</option>
+                      <option value="violet">Viola</option>
+                    </select>
+                  </div>
+
+                  <div class="field">
+                    <label for="leaderName">Caposquadra</label>
+                    <input id="leaderName" required placeholder="Nome e cognome" />
+                  </div>
+
+                  <div class="field">
+                    <label for="radioCode">Radio assegnata</label>
+                    <input id="radioCode" placeholder="Es. R-17 / Canale 3" />
+                  </div>
+
+                  <div class="field full">
+                    <label for="members">Componenti squadra</label>
+                    <textarea id="members" placeholder="Un nominativo per riga oppure separati da virgola"></textarea>
+                  </div>
+
+                  <div class="field full">
+                    <label for="training">Formazione / specializzazione</label>
+                    <textarea id="training" placeholder="Es. antincendio boschivo, idrogeologico, logistica, telecomunicazioni..."></textarea>
+                  </div>
+
+                  <div class="field full">
+                    <label for="vehicles">Mezzi assegnati</label>
+                    <textarea id="vehicles" placeholder="Es. Pick-up 4x4, modulo pompa, torre fari, gommone..."></textarea>
+                  </div>
+
+                  <div class="field">
+                    <label for="originLat">Latitudine partenza</label>
+                    <input id="originLat" type="number" step="0.000001" value="44.8339" />
+                  </div>
+
+                  <div class="field">
+                    <label for="originLng">Longitudine partenza</label>
+                    <input id="originLng" type="number" step="0.000001" value="11.2931" />
+                  </div>
+
+                  <div class="field">
+                    <label for="destinationName">Luogo destinazione</label>
+                    <input id="destinationName" placeholder="Es. Argine Panaro - Settore Nord" />
+                  </div>
+
+                  <div class="field">
+                    <label for="destLat">Latitudine destinazione</label>
+                    <input id="destLat" type="number" step="0.000001" placeholder="44.84" />
+                  </div>
+
+                  <div class="field">
+                    <label for="destLng">Longitudine destinazione</label>
+                    <input id="destLng" type="number" step="0.000001" placeholder="11.31" />
+                  </div>
+
+                  <div class="field">
+                    <label for="status">Stato missione</label>
+                    <select id="status">
+                      <option value="Pronta">Pronta</option>
+                      <option value="In trasferimento">In trasferimento</option>
+                      <option value="Operativa">Operativa</option>
+                      <option value="In rientro">In rientro</option>
+                    </select>
+                  </div>
+
+                  <div class="field full">
+                    <label for="notes">Note operative</label>
+                    <textarea id="notes" placeholder="Briefing, priorità, attrezzatura da reperire, contatti utili..."></textarea>
+                  </div>
+                </div>
+
+                <div class="inline-actions">
+                  <button class="btn btn-primary" type="submit">Salva squadra</button>
+                  <button class="btn btn-secondary" type="button" id="btnNewForm">Nuova scheda</button>
+                  <button class="btn btn-secondary" type="button" id="btnDuplicateCurrent">Duplica</button>
+                </div>
+              </form>
+            </div>
+          </div>
+
+          <div class="stack">
+            <div class="panel reveal" style="transition-delay: 0.08s">
+              <div class="panel-header">
+                <div>
+                  <h3>Anteprima scheda operativa</h3>
+                  <p>Riepilogo in tempo reale della squadra e stima del percorso verso la destinazione.</p>
+                </div>
+              </div>
+              <div class="panel-body">
+                <div id="livePreview" class="empty">Compila il modulo per vedere il riepilogo operativo della squadra.</div>
+              </div>
+            </div>
+
+            <div class="panel reveal" style="transition-delay: 0.14s">
+              <div class="panel-header">
+                <div>
+                  <h3>Archivio richiamabile</h3>
+                  <p>Seleziona una squadra esistente e caricala nel modulo per modifica o duplicazione.</p>
+                </div>
+              </div>
+              <div class="panel-body">
+                <div class="field">
+                  <label for="savedTeamsSelect">Squadre salvate</label>
+                  <select id="savedTeamsSelect"></select>
+                </div>
+                <div class="inline-actions">
+                  <button class="btn btn-primary" id="btnLoadSelected">Carica nel modulo</button>
+                  <button class="btn btn-danger" id="btnDeleteSelected">Elimina squadra</button>
+                </div>
+              </div>
+            </div>
+
+            <div class="panel reveal" style="transition-delay: 0.18s">
+              <div class="panel-header">
+                <div>
+                  <h3>Generazione log automatico</h3>
+                  <p>Ogni azione produce una riga con data, ora, squadra, azione e dettaglio testuale.</p>
+                </div>
+              </div>
+              <div class="panel-body">
+                <div id="lastActionBox" class="empty">Nessuna azione recente.</div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <section id="page-log" class="page">
+        <div class="grid-main">
+          <div class="panel reveal">
+            <div class="panel-header">
+              <div>
+                <h3>Log testuale in formato CSV</h3>
+                <p>Il log è richiamabile dalla dashboard e aggiornato automaticamente dalla pagina “Genera Squadre”.</p>
+              </div>
+              <div class="inline-actions" style="margin-top: 0">
+                <button class="btn btn-primary" id="btnDownloadCsv">Scarica CSV</button>
+                <button class="btn btn-secondary" id="btnCopyCsv">Copia testo CSV</button>
+              </div>
+            </div>
+            <div class="panel-body">
+              <textarea id="csvOutput" class="csv-area" aria-label="Log in formato CSV" readonly></textarea>
+            </div>
+          </div>
+
+          <div class="panel reveal" style="transition-delay: 0.08s">
+            <div class="panel-header">
+              <div>
+                <h3>Cronologia leggibile</h3>
+                <p>Versione umana del registro eventi operativo.</p>
+              </div>
+            </div>
+            <div class="panel-body">
+              <div id="fullLogList" class="log-list"></div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <section id="page-mappa" class="page">
+        <div class="map-layout">
+          <aside class="map-sidebar">
+            <div class="panel reveal">
+              <div class="panel-header">
+                <div>
+                  <h3>Mappa open maps</h3>
+                  <p>Base OSM con layer personalizzabili e marker colorati per ogni squadra.</p>
+                </div>
+              </div>
+              <div class="panel-body">
+                <div class="layers">
+                  <div class="layer-toggle">
+                    <label><input type="checkbox" id="toggleBase" checked /> Base OpenStreetMap</label>
+                  </div>
+                  <div class="layer-toggle">
+                    <label><input type="checkbox" id="toggleTopo" /> Layer topografico</label>
+                  </div>
+                  <div class="layer-toggle">
+                    <label><input type="checkbox" id="toggleCyclOSM" /> Layer dettaglio territorio</label>
+                  </div>
+                  <div class="layer-toggle">
+                    <label><input type="checkbox" id="toggleHydro" checked /> Overlay canali / fiumi</label>
+                  </div>
+                  <div class="layer-toggle">
+                    <label><input type="checkbox" id="toggleOro" checked /> Overlay orogeografico</label>
+                  </div>
+                  <div class="layer-toggle">
+                    <label><input type="checkbox" id="toggleRoutes" checked /> Percorsi squadra-destinazione</label>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <div class="panel reveal" style="transition-delay: 0.08s">
+              <div class="panel-header">
+                <div>
+                  <h3>Controlli operativi</h3>
+                  <p>Richiama rapidamente una squadra e centra la vista sulla sua missione.</p>
+                </div>
+              </div>
+              <div class="panel-body">
+                <div class="field">
+                  <label for="mapSquadSelect">Squadra in mappa</label>
+                  <select id="mapSquadSelect"></select>
+                </div>
+                <div class="inline-actions">
+                  <button class="btn btn-primary" id="btnFocusMapSquad">Centra squadra</button>
+                  <button class="btn btn-secondary" id="btnResetMapView">Torna su Finale Emilia</button>
+                </div>
+                <p class="note" style="margin-top: 14px">
+                  Le distanze e i tempi di arrivo sono stimati in linea d’aria corretta con fattore stradale. Per routing turn-by-turn reale è consigliata una futura integrazione con OSRM o GraphHopper.
+                </p>
+              </div>
+            </div>
+
+            <div class="panel reveal" style="transition-delay: 0.14s">
+              <div class="panel-header">
+                <div>
+                  <h3>Legenda</h3>
+                </div>
+              </div>
+              <div class="panel-body">
+                <div class="layers">
+                  <div class="layer-toggle"><label><span style="display:inline-block;width:14px;height:14px;border-radius:50%;background:#d64545"></span> Rosso</label><span class="note">Priorità alta</span></div>
+                  <div class="layer-toggle"><label><span style="display:inline-block;width:14px;height:14px;border-radius:50%;background:#2f6edb"></span> Blu</label><span class="note">Supporto</span></div>
+                  <div class="layer-toggle"><label><span style="display:inline-block;width:14px;height:14px;border-radius:50%;background:#2f9d57"></span> Verde</label><span class="note">Territorio</span></div>
+                  <div class="layer-toggle"><label><span style="display:inline-block;width:14px;height:14px;border-radius:50%;background:#e28a2d"></span> Arancione</label><span class="note">Logistica</span></div>
+                  <div class="layer-toggle"><label><span style="display:inline-block;width:14px;height:14px;border-radius:50%;background:#805ad5"></span> Viola</label><span class="note">Comunicazioni</span></div>
+                </div>
+              </div>
+            </div>
+          </aside>
+
+          <div class="reveal" style="transition-delay: 0.04s">
+            <div id="map" aria-label="Mappa operativa delle squadre"></div>
+          </div>
+        </div>
+      </section>
+    </main>
+
+    <footer class="footer">
+      Dashboard locale single-file • salvataggio automatico nel browser • pronta per futura integrazione backend/API
+    </footer>
+  </div>
+
+  <!-- Leaflet JS -->
+  <script
+    src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"
+    crossorigin=""
+  ></script>
+  <!-- Leaflet Routing Machine JS -->
+  <script src="https://unpkg.com/leaflet-routing-machine@3.2.12/dist/leaflet-routing-machine.min.js"></script>
+
+  <script>
+    const STORAGE_KEYS = {
+      squads: "pc_dashboard_squads_v1",
+      logs: "pc_dashboard_logs_v1",
+      draft: "pc_dashboard_draft_v1",
+    };
+
+    const FINALE_EMILIA = { lat: 44.8339, lng: 11.2931 };
+
+    const state = {
+      squads: loadLocal(STORAGE_KEYS.squads, []),
+      logs: loadLocal(STORAGE_KEYS.logs, []),
+      map: null,
+      markersLayer: null,
+      hydroLayer: null,
+      oroLayer: null,
+    };
+
+    // Variabile globale per i controlli routing per ogni squadra
+    const routingControls = {};
+
+    function loadLocal(key, fallback) {
+      try {
+        const val = localStorage.getItem(key);
+        return val ? JSON.parse(val) : fallback;
+      } catch (e) {
+        return fallback;
+      }
+    }
+
+    function saveLocal(key, value) {
+      localStorage.setItem(key, JSON.stringify(value));
+    }
+
+    function nowParts() {
+      const d = new Date();
+      const date = d.toLocaleDateString("it-IT");
+      const time = d.toLocaleTimeString("it-IT");
+      const iso = d.toISOString();
+      return { date, time, iso };
+    }
+
+    function csvEscape(value) {
+      const str = String(value ?? "");
+      return `"${str.replace(/"/g, '""')}"`;
+    }
+
+    function addLog(teamName, action, details) {
+      const t = nowParts();
+      const entry = {
+        id: crypto.randomUUID(),
+        iso: t.iso,
+        date: t.date,
+        time: t.time,
+        teamName: teamName || "",
+        action,
+        details,
+      };
+      state.logs.unshift(entry);
+      saveLocal(STORAGE_KEYS.logs, state.logs);
+      renderLogs();
+      updateMetrics();
+      const lastBox = document.getElementById("lastActionBox");
+      if (lastBox) {
+        lastBox.innerHTML = `
+          <strong>${escapeHtml(action)}</strong><br>
+          <span style="color:var(--muted)">${escapeHtml(t.date)} • ${escapeHtml(
+          t.time
+        )}</span>
+          <p style="margin:.55rem 0 0;color:var(--text)">${escapeHtml(details)}</p>
+        `;
+      }
+    }
+
+    function parseList(text) {
+      return (text || "")
+        .split(/\n|,/)
+        .map((v) => v.trim())
+        .filter(Boolean);
+    }
+
+    function estimateRoute(originLat, originLng, destLat, destLng) {
+      const distance = haversine(originLat, originLng, destLat, destLng);
+      const roadDistance = distance * 1.18;
+      const avgSpeed = 48;
+      const etaMin = (roadDistance / avgSpeed) * 60;
+      return {
+        linearKm: distance.toFixed(1),
+        roadKm: roadDistance.toFixed(1),
+        etaMin: Math.max(1, Math.round(etaMin)),
+      };
+    }
+
+    function haversine(lat1, lon1, lat2, lon2) {
+      const toRad = (deg) => (deg * Math.PI) / 180;
+      const R = 6371;
+      const dLat = toRad(lat2 - lat1);
+      const dLon = toRad(lon2 - lon1);
+      const a =
+        Math.sin(dLat / 2) * Math.sin(dLat / 2) +
+        Math.cos(toRad(lat1)) *
+          Math.cos(toRad(lat2)) *
+          Math.sin(dLon / 2) *
+          Math.sin(dLon / 2);
+      return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+    }
+
+    function formToSquad() {
+      const members = parseList(document.getElementById("members").value);
+      const vehicles = parseList(document.getElementById("vehicles").value);
+      const training = parseList(document.getElementById("training").value);
+
+      const originLat = parseFloat(
+        document.getElementById("originLat").value || FINALE_EMILIA.lat
+      );
+      const originLng = parseFloat(
+        document.getElementById("originLng").value || FINALE_EMILIA.lng
+      );
+      const destLat = parseFloat(
+        document.getElementById("destLat").value || originLat
+      );
+      const destLng = parseFloat(
+        document.getElementById("destLng").value || originLng
+      );
+
+      const route = estimateRoute(originLat, originLng, destLat, destLng);
+
+      return {
+        id: document.getElementById("editId").value || crypto.randomUUID(),
+        teamName: document.getElementById("teamName").value.trim(),
+        teamColor: document.getElementById("teamColor").value,
+        leaderName: document.getElementById("leaderName").value.trim(),
+        radioCode: document.getElementById("radioCode").value.trim(),
+        members,
+        training,
+        vehicles,
+        originLat,
+        originLng,
+        destinationName: document.getElementById("destinationName").value.trim(),
+        destLat,
+        destLng,
+        status: document.getElementById("status").value,
+        notes: document.getElementById("notes").value.trim(),
+        route,
+        updatedAt: new Date().toISOString(),
+      };
+    }
+
+    function squadToForm(squad, keepId = true) {
+      document.getElementById("editId").value = keepId ? squad.id || "" : "";
+      document.getElementById("teamName").value = squad.teamName || "";
+      document.getElementById("teamColor").value = squad.teamColor || "red";
+      document.getElementById("leaderName").value = squad.leaderName || "";
+      document.getElementById("radioCode").value = squad.radioCode || "";
+      document.getElementById("members").value = (squad.members || []).join("\n");
+      document.getElementById("training").value = (squad.training || []).join("\n");
+      document.getElementById("vehicles").value = (squad.vehicles || []).join("\n");
+      document.getElementById("originLat").value = squad.originLat ?? FINALE_EMILIA.lat;
+      document.getElementById("originLng").value = squad.originLng ?? FINALE_EMILIA.lng;
+      document.getElementById("destinationName").value = squad.destinationName || "";
+      document.getElementById("destLat").value = squad.destLat ?? "";
+      document.getElementById("destLng").value = squad.destLng ?? "";
+      document.getElementById("status").value = squad.status || "Pronta";
+      document.getElementById("notes").value = squad.notes || "";
+      renderLivePreview();
+      saveDraft();
+    }
+
+    function clearForm() {
+      document.getElementById("squadForm").reset();
+      document.getElementById("editId").value = "";
+      document.getElementById("originLat").value = FINALE_EMILIA.lat;
+      document.getElementById("originLng").value = FINALE_EMILIA.lng;
+      document.getElementById("teamColor").value = "red";
+      document.getElementById("status").value = "Pronta";
+      renderLivePreview();
+      saveDraft();
+    }
+
+    function saveDraft() {
+      const draft = {
+        editId: document.getElementById("editId").value,
+        teamName: document.getElementById("teamName").value,
+        teamColor: document.getElementById("teamColor").value,
+        leaderName: document.getElementById("leaderName").value,
+        radioCode: document.getElementById("radioCode").value,
+        members: document.getElementById("members").value,
+        training: document.getElementById("training").value,
+        vehicles: document.getElementById("vehicles").value,
+        originLat: document.getElementById("originLat").value,
+        originLng: document.getElementById("originLng").value,
+        destinationName: document.getElementById("destinationName").value,
+        destLat: document.getElementById("destLat").value,
+        destLng: document.getElementById("destLng").value,
+        status: document.getElementById("status").value,
+        notes: document.getElementById("notes").value,
+      };
+      saveLocal(STORAGE_KEYS.draft, draft);
+    }
+
+    function loadDraft() {
+      const draft = loadLocal(STORAGE_KEYS.draft, null);
+      if (!draft) return;
+      Object.keys(draft).forEach((id) => {
+        const el = document.getElementById(id);
+        if (el) el.value = draft[id];
+      });
+      renderLivePreview();
+    }
+
+    function renderLivePreview() {
+      const box = document.getElementById("livePreview");
+      const name = document.getElementById("teamName").value.trim();
+      const leader = document.getElementById("leaderName").value.trim();
+      const radio = document.getElementById("radioCode").value.trim();
+      const destinationName = document.getElementById("destinationName").value.trim();
+      const members = parseList(document.getElementById("members").value);
+      const vehicles = parseList(document.getElementById("vehicles").value);
+      const training = parseList(document.getElementById("training").value);
+
+      if (!name && !leader && !destinationName) {
+        box.className = "empty";
+        box.innerHTML = "Compila il modulo per vedere il riepilogo operativo della squadra.";
+        return;
+      }
+
+      const originLat = parseFloat(document.getElementById("originLat").value || FINALE_EMILIA.lat);
+      const originLng = parseFloat(document.getElementById("originLng").value || FINALE_EMILIA.lng);
+      const destLat = parseFloat(document.getElementById("destLat").value || originLat);
+      const destLng = parseFloat(document.getElementById("destLng").value || originLng);
+      const route = estimateRoute(originLat, originLng, destLat, destLng);
+
+      box.className = "";
+      box.innerHTML = `
+        <div class="squad-title">
+          <h4>${escapeHtml(name || "Squadra senza nome")}</h4>
+          <span class="tag">${escapeHtml(document.getElementById("status").value)}</span>
+        </div>
+        <div class="squad-meta">
+          <div><strong>Caposquadra:</strong> ${escapeHtml(leader || "—")}</div>
+          <div><strong>Radio:</strong> ${escapeHtml(radio || "—")}</div>
+          <div><strong>Operatori:</strong> ${members.length}</div>
+          <div><strong>Mezzi:</strong> ${vehicles.length}</div>
+          <div><strong>Destinazione:</strong> ${escapeHtml(destinationName || "—")}</div>
+          <div><strong>ETA stimato:</strong> ${route.etaMin} min</div>
+          <div><strong>Distanza stimata:</strong> ${route.roadKm} km</div>
+          <div><strong>Coordinate:</strong> ${originLat.toFixed(4)}, ${originLng.toFixed(4)}</div>
+        </div>
+        <div style="margin-top:14px;color:var(--muted);font-size:.92rem;line-height:1.6">
+          <strong style="color:var(--text)">Formazione:</strong> ${
+            training.length ? escapeHtml(training.join(" • ")) : "—"
+          }<br>
+          <strong style="color:var(--text)">Componenti:</strong> ${
+            members.length ? escapeHtml(members.join(", ")) : "—"
+          }<br>
+          <strong style="color:var(--text)">Mezzi:</strong> ${
+            vehicles.length ? escapeHtml(vehicles.join(", ")) : "—"
+          }
+        </div>
+      `;
+    }
+
+    function renderSquads() {
+      const list = document.getElementById("squadList");
+      const quickRecallSelect = document.getElementById("quickRecallSelect");
+      const savedTeamsSelect = document.getElementById("savedTeamsSelect");
+      const mapSquadSelect = document.getElementById("mapSquadSelect");
+
+      [quickRecallSelect, savedTeamsSelect, mapSquadSelect].forEach((sel) => {
+        sel.innerHTML = "";
+        const placeholder = document.createElement("option");
+        placeholder.value = "";
+        placeholder.textContent = state.squads.length
+          ? "Seleziona una squadra"
+          : "Nessuna squadra salvata";
+        sel.appendChild(placeholder);
+      });
+
+      if (!state.squads.length) {
+        list.innerHTML = `<div class="empty">Nessuna squadra archiviata. Vai su “Genera Squadre” per inserire la prima unità operativa.</div>`;
+        renderMapWithRouting();
+        updateMetrics();
+        return;
+      }
+
+      const sorted = [...state.squads].sort((a, b) =>
+        a.teamName.localeCompare(b.teamName, "it")
+      );
+      list.innerHTML = sorted
+        .map(
+          (squad) => `
+        <article class="squad-item">
+          <div>
+            <div class="squad-title">
+              <h4>${escapeHtml(squad.teamName)}</h4>
+              <span class="tag">${escapeHtml(squad.status || "Pronta")}</span>
+              <span class="tag" style="background:${badgeBg(
+                squad.teamColor
+              )};color:${badgeText(squad.teamColor)}">${escapeHtml(
+            colorLabel(squad.teamColor)
+          )}</span>
+            </div>
+            <div class="squad-meta">
+              <div><strong>Caposquadra:</strong> ${escapeHtml(
+                squad.leaderName || "—"
+              )}</div>
+              <div><strong>Radio:</strong> ${escapeHtml(
+                squad.radioCode || "—"
+              )}</div>
+              <div><strong>Operatori:</strong> ${(squad.members || []).length}</div>
+              <div><strong>Mezzi:</strong> ${(squad.vehicles || []).length}</div>
+              <div><strong>Destinazione:</strong> ${escapeHtml(
+                squad.destinationName || "—"
+              )}</div>
+              <div><strong>ETA:</strong> ${escapeHtml(
+                (squad.route?.etaMin ?? 0) + " min"
+              )}</div>
+              <div><strong>Partenza:</strong> ${Number(
+                squad.originLat
+              ).toFixed(4)}, ${Number(squad.originLng).toFixed(4)}</div>
+              <div><strong>Arrivo:</strong> ${Number(
+                squad.destLat
+              ).toFixed(4)}, ${Number(squad.destLng).toFixed(4)}</div>
+            </div>
+          </div>
+          <div class="item-actions">
+            <button class="mini-btn green" onclick="editSquad('${
+              squad.id
+            }')">Modifica</button>
+            <button class="mini-btn blue" onclick="focusSquadOnMap('${
+              squad.id
+            }')">Mappa</button>
+            <button class="mini-btn red" onclick="deleteSquad('${
+              squad.id
+            }')">Elimina</button>
+          </div>
+        </article>
+      `
+        )
+        .join("");
+
+      sorted.forEach((squad) => {
+        [quickRecallSelect, savedTeamsSelect, mapSquadSelect].forEach((sel) => {
+          const opt = document.createElement("option");
+          opt.value = squad.id;
+          opt.textContent = `${squad.teamName} • ${squad.leaderName || "n.d."}`;
+          sel.appendChild(opt);
+        });
+      });
+
+      updateMetrics();
+      renderMapWithRouting();
+    }
+
+    function renderLogs() {
+      const csvOutput = document.getElementById("csvOutput");
+      const fullLogList = document.getElementById("fullLogList");
+      const recentLogs = document.getElementById("recentLogs");
+
+      const header = ["Data", "Ora", "TimestampISO", "Squadra", "Azione", "Dettagli"];
+      const rows = state.logs.map((log) => [
+        log.date,
+        log.time,
+        log.iso,
+        log.teamName,
+        log.action,
+        log.details,
+      ]);
+      const csv = [header, ...rows]
+        .map((row) => row.map(csvEscape).join(";"))
+        .join("\n");
+
+      csvOutput.value = csv;
+
+      const renderEntries = (entries, target) => {
+        if (!entries.length) {
+          target.innerHTML = `<div class="empty">Nessun evento di log registrato.</div>`;
+          return;
+        }
+        target.innerHTML = entries
+          .map(
+            (log) => `
+          <div class="log-entry">
+            <strong>${escapeHtml(log.action)} • ${escapeHtml(
+              log.teamName || "Sistema"
+            )}</strong>
+            <span>${escapeHtml(log.date)} • ${escapeHtml(log.time)}</span>
+            <div>${escapeHtml(log.details)}</div>
+          </div>
+        `
+          )
+          .join("");
+      };
+
+      renderEntries(state.logs, fullLogList);
+      renderEntries(state.logs.slice(0, 6), recentLogs);
+    }
+
+    function updateMetrics() {
+      const totalSquads = state.squads.length;
+      const totalOperators = state.squads.reduce(
+        (sum, s) => sum + (s.members?.length || 0),
+        0
+      );
+      const totalLogs = state.logs.length;
+      const totalVehicles = state.squads.reduce(
+        (sum, s) => sum + (s.vehicles?.length || 0),
+        0
+      );
+      const totalRadio = state.squads.filter((s) => (s.radioCode || "").trim())
+        .length;
+      const avgEta = totalSquads
+        ? Math.round(
+            state.squads.reduce(
+              (sum, s) => sum + (Number(s.route?.etaMin) || 0),
+              0
+            ) / totalSquads
+          )
+        : 0;
+
+      document.getElementById("metricSquadre").textContent = totalSquads;
+      document.getElementById("metricOperatori").textContent = totalOperators;
+      document.getElementById("metricLog").textContent = totalLogs;
+      document.getElementById("statAttive").textContent = totalSquads;
+      document.getElementById("statMezzi").textContent = totalVehicles;
+      document.getElementById("statRadio").textContent = totalRadio;
+      document.getElementById("statEtaMedia").textContent = avgEta;
+    }
+
+    function saveSquad(squad) {
+      const index = state.squads.findIndex((s) => s.id === squad.id);
+      const exists = index >= 0;
+      if (exists) {
+        state.squads[index] = squad;
+      } else {
+        state.squads.push(squad);
+      }
+      saveLocal(STORAGE_KEYS.squads, state.squads);
+      renderSquads();
+      renderLogs();
+      updateMetrics();
+
+      addLog(
+        squad.teamName,
+        exists ? "Aggiornamento squadra" : "Creazione squadra",
+        `${
+          exists ? "Aggiornata" : "Creata"
+        } squadra "${squad.teamName}" con caposquadra ${
+          squad.leaderName || "n.d."
+        }, ${(squad.members || []).length} componenti, ${
+          (squad.vehicles || []).length
+        } mezzi, destinazione ${squad.destinationName || "non specificata"}.`
+      );
+    }
+
+    function editSquad(id) {
+      const squad = state.squads.find((s) => s.id === id);
+      if (!squad) return;
+      squadToForm(squad, true);
+      switchPage("page-genera");
+      addLog(
+        squad.teamName,
+        "Richiamo squadra",
+        `Richiamata nel modulo la squadra "${squad.teamName}" per consultazione o modifica.`
+      );
+    }
+
+    function deleteSquad(id) {
+      const squad = state.squads.find((s) => s.id === id);
+      if (!squad) return;
+      if (!confirm(`Eliminare la squadra "${squad.teamName}"?`)) return;
+      state.squads = state.squads.filter((s) => s.id !== id);
+      saveLocal(STORAGE_KEYS.squads, state.squads);
+      renderSquads();
+      addLog(
+        squad.teamName,
+        "Eliminazione squadra",
+        `Eliminata la squadra "${squad.teamName}" dall'archivio locale.`
+      );
+      clearForm();
+    }
+
+    function exportCsv() {
+      const csv = document.getElementById("csvOutput").value;
+      const blob = new Blob([csv], { type: "text/csv;charset=utf-8;" });
+      const a = document.createElement("a");
+      a.href = URL.createObjectURL(blob);
+      a.download = `log_protezione_civile_${new Date()
+        .toISOString()
+        .slice(0, 19)
+        .replace(/[:T]/g, "-")}.csv`;
+      a.click();
+      URL.revokeObjectURL(a.href);
+      addLog("Sistema", "Esportazione CSV", "Scaricato il file CSV del log operativo.");
+    }
+
+    function exportJsonBackup() {
+      const payload = {
+        exportedAt: new Date().toISOString(),
+        squads: state.squads,
+        logs: state.logs,
+      };
+      const blob = new Blob([JSON.stringify(payload, null, 2)], {
+        type: "application/json;charset=utf-8;",
+      });
+      const a = document.createElement("a");
+      a.href = URL.createObjectURL(blob);
+      a.download = `backup_dashboard_pc_${new Date()
+        .toISOString()
+        .slice(0, 19)
+        .replace(/[:T]/g, "-")}.json`;
+      a.click();
+      URL.revokeObjectURL(a.href);
+      addLog("Sistema", "Esportazione backup", "Esportato backup JSON completo di squadre e log.");
+    }
+
+    function switchPage(pageId) {
+      document.querySelectorAll(".page").forEach((p) => p.classList.remove("active"));
+      document.getElementById(pageId).classList.add("active");
+      document.querySelectorAll(".nav-btn").forEach((btn) => {
+        btn.classList.toggle("active", btn.dataset.pageTarget === pageId);
+      });
+      if (pageId === "page-mappa" && state.map) {
+        setTimeout(() => state.map.invalidateSize(), 120);
+      }
+    }
+
+    function escapeHtml(str) {
+      return String(str ?? "")
+        .replace(/&/g, "&amp;")
+        .replace(/</g, "&lt;")
+        .replace(/>/g, "&gt;")
+        .replace(/"/g, "&quot;")
+        .replace(/'/g, "&#039;");
+    }
+
+    function badgeBg(color) {
+      const map = {
+        red: "rgba(214,69,69,.12)",
+        blue: "rgba(47,110,219,.12)",
+        green: "rgba(47,157,87,.12)",
+        orange: "rgba(226,138,45,.15)",
+        violet: "rgba(128,90,213,.14)",
+      };
+      return map[color] || "rgba(47,107,62,.1)";
+    }
+
+    function badgeText(color) {
+      const map = {
+        red: "#b12d2d",
+        blue: "#245fbe",
+        green: "#217645",
+        orange: "#a96416",
+        violet: "#6c43c5",
+      };
+      return map[color] || "var(--accent)";
+    }
+
+    function colorLabel(color) {
+      const labels = {
+        red: "Rosso",
+        blue: "Blu",
+        green: "Verde",
+        orange: "Arancione",
+        violet: "Viola",
+      };
+      return labels[color] || color;
+    }
+
+    function iconColor(color) {
+      return {
+        red: "#d64545",
+        blue: "#2f6edb",
+        green: "#2f9d57",
+        orange: "#e28a2d",
+        violet: "#805ad5",
+      }[color] || "#2f6b3e";
+    }
+
+    function makeMarkerIcon(color) {
+      const fill = iconColor(color);
+      return L.divIcon({
+        className: "",
+        html: `
+          <div style="position:relative;width:22px;height:22px;">
+            <div style="
+              width:22px;height:22px;border-radius:50% 50% 50% 0;
+              background:${fill};
+              transform:rotate(-45deg);
+              border:2px solid rgba(255,255,255,.95);
+              box-shadow:0 8px 18px rgba(18,31,21,.25);
+              position:absolute;left:0;top:0;"></div>
+            <div style="
+              width:8px;height:8px;border-radius:50%;
+              background:white; position:absolute; left:7px; top:7px;"></div>
+          </div>
+        `,
+        iconSize: [22, 22],
+        iconAnchor: [11, 22],
+        popupAnchor: [0, -18],
+      });
+    }
+
+    // Inizializzazione mappa e layers
+    function initMap() {
+      state.map = L.map("map", { zoomControl: true }).setView(
+        [FINALE_EMILIA.lat, FINALE_EMILIA.lng],
+        12
+      );
+
+      state.baseLayer = L.tileLayer(
+        "https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png",
+        {
+          attribution: "&copy; OpenStreetMap contributors",
+        }
+      ).addTo(state.map);
+
+      state.topoLayer = L.tileLayer(
+        "https://{s}.tile.opentopomap.org/{z}/{x}/{y}.png",
+        {
+          attribution: "&copy; OpenTopoMap",
+        }
+      );
+
+      state.cyclLayer = L.tileLayer(
+        "https://{s}.tile-cyclosm.openstreetmap.fr/cyclosm/{z}/{x}/{y}.png",
+        {
+          attribution: "&copy; CyclOSM",
+        }
+      );
+
+      state.markersLayer = L.layerGroup().addTo(state.map);
+      state.hydroLayer = L.layerGroup().addTo(state.map);
+      state.oroLayer = L.layerGroup().addTo(state.map);
+
+      drawStaticOverlays();
+      bindMapToggles();
+      renderMapWithRouting();
+    }
+
+    // Disegna overlay statici (canali, orografia)
+    function drawStaticOverlays() {
+      state.hydroLayer.clearLayers();
+      state.oroLayer.clearLayers();
+
+      const hydroLines = [
+        [
+          [44.857, 11.225],
+          [44.851, 11.245],
+          [44.847, 11.273],
+          [44.842, 11.309],
+          [44.836, 11.344],
+        ],
+        [
+          [44.813, 11.202],
+          [44.82, 11.238],
+          [44.826, 11.274],
+          [44.831, 11.316],
+          [44.834, 11.356],
+        ],
+        [
+          [44.878, 11.262],
+          [44.864, 11.282],
+          [44.852, 11.301],
+          [44.84, 11.322],
+        ],
+      ];
+      hydroLines.forEach((line) => {
+        L.polyline(line, {
+          color: "#3f88c5",
+          weight: 3,
+          opacity: 0.72,
+          dashArray: "6 8",
+        })
+          .bindTooltip("Canale / corso d’acqua")
+          .addTo(state.hydroLayer);
+      });
+
+      const oroZones = [
+        {
+          center: [44.862, 11.188],
+          radius: 2200,
+          name: "Area di rilievo arginale",
+        },
+        {
+          center: [44.792, 11.365],
+          radius: 2900,
+          name: "Zona di possibile criticità idraulica",
+        },
+        {
+          center: [44.884, 11.332],
+          radius: 1800,
+          name: "Nodo territoriale sopraelevato",
+        },
+      ];
+
+      oroZones.forEach((z) => {
+        L.circle(z.center, {
+          radius: z.radius,
+          color: "#7b8b3a",
+          fillColor: "#a8bb5d",
+          fillOpacity: 0.12,
+          weight: 2,
+        })
+          .bindTooltip(z.name)
+          .addTo(state.oroLayer);
+      });
+    }
+
+    // Gestione toggle layer mappa
+    function bindMapToggles() {
+      document.getElementById("toggleBase").addEventListener("change", (e) => {
+        if (e.target.checked) state.baseLayer.addTo(state.map);
+        else state.map.removeLayer(state.baseLayer);
+      });
+
+      document.getElementById("toggleTopo").addEventListener("change", (e) => {
+        if (e.target.checked) state.topoLayer.addTo(state.map);
+        else state.map.removeLayer(state.topoLayer);
+      });
+
+      document.getElementById("toggleCyclOSM").addEventListener("change", (e) => {
+        if (e.target.checked) state.cyclLayer.addTo(state.map);
+        else state.map.removeLayer(state.cyclLayer);
+      });
+
+      document.getElementById("toggleHydro").addEventListener("change", (e) => {
+        if (e.target.checked) state.hydroLayer.addTo(state.map);
+        else state.map.removeLayer(state.hydroLayer);
+      });
+
+      document.getElementById("toggleOro").addEventListener("change", (e) => {
+        if (e.target.checked) state.oroLayer.addTo(state.map);
+        else state.map.removeLayer(state.oroLayer);
+      });
+    }
+
+    // Variabile globale per il routing control attivo
+    let routingControl = null;
+
+    // Funzione per aggiornare il routing in tempo reale per una squadra
+    function updateRouteOnMap(originLat, originLng, destLat, destLng, color = "#2f6b3e") {
+      if (!state.map) return;
+
+      if (routingControl) {
+        state.map.removeControl(routingControl);
+        routingControl = null;
+      }
+
+      routingControl = L.Routing.control({
+        waypoints: [L.latLng(originLat, originLng), L.latLng(destLat, destLng)],
+        lineOptions: {
+          styles: [{ color: color, weight: 5 }],
+        },
+        createMarker: () => null,
+        addWaypoints: false,
+        routeWhileDragging: false,
+        draggableWaypoints: false,
+        fitSelectedRoutes: true,
+        showAlternatives: false,
+        show: false,
+        router: L.Routing.osrmv1({
+          serviceUrl: "https://router.project-osrm.org/route/v1",
+        }),
+      }).addTo(state.map);
+
+      routingControl.on("routesfound", (e) => {
+        const route = e.routes[0];
+        if (route) {
+          const distanceKm = (route.summary.totalDistance / 1000).toFixed(1);
+          const timeMin = Math.round(route.summary.totalTime / 60);
+          // Aggiorna la squadra con dati reali di percorso
+          const squad = state.squads.find(
+            (s) =>
+              s.originLat === originLat &&
+              s.originLng === originLng &&
+              s.destLat === destLat &&
+              s.destLng === destLng
+          );
+          if (squad) {
+            squad.route = {
+              roadKm: distanceKm,
+              etaMin: timeMin,
+            };
+            updateMetrics();
+          }
+        }
+      });
+    }
+
+    // Funzione per renderizzare la mappa con marker e routing
+    function renderMapWithRouting() {
+      if (!state.map) return;
+
+      state.markersLayer.clearLayers();
+
+      // Rimuove routing precedente
+      if (routingControl) {
+        state.map.removeControl(routingControl);
+        routingControl = null;
+      }
+
+      // Aggiunge marker e routing per la prima squadra (se presente)
+      if (state.squads.length > 0) {
+        const squad = state.squads[0];
+        const marker = L.marker([squad.originLat, squad.originLng], {
+          icon: makeMarkerIcon(squad.teamColor),
+        }).addTo(state.markersLayer);
+
+        marker.bindPopup(`
+          <div class="popup-card">
+            <h4>${escapeHtml(squad.teamName)}</h4>
+            <p><strong>Caposquadra:</strong> ${escapeHtml(
+              squad.leaderName || "—"
+            )}</p>
+            <p><strong>Componenti:</strong> ${escapeHtml(
+              (squad.members || []).join(", ") || "—"
+            )}</p>
+            <p><strong>Radio:</strong> ${escapeHtml(squad.radioCode || "—")}</p>
+            <p><strong>Mezzi:</strong> ${escapeHtml(
+              (squad.vehicles || []).join(", ") || "—"
+            )}</p>
+            <p><strong>Destinazione:</strong> ${escapeHtml(
+              squad.destinationName || "—"
+            )}</p>
+          </div>
+        `);
+
+        updateRouteOnMap(
+          squad.originLat,
+          squad.originLng,
+          squad.destLat,
+          squad.destLng,
+          iconColor(squad.teamColor)
+        );
+      }
+    }
+
+    // Funzioni per interazione mappa con selezione squadra
+    function focusSquadOnMap(id) {
+      const squad = state.squads.find((s) => s.id === id);
+      if (!squad || !state.map) return;
+      switchPage("page-mappa");
+      document.getElementById("mapSquadSelect").value = squad.id;
+
+      const bounds = L.latLngBounds([
+        [squad.originLat, squad.originLng],
+        [squad.destLat, squad.destLng],
+      ]);
+      state.map.fitBounds(bounds.pad(0.35));
+
+      updateRouteOnMap(
+        squad.originLat,
+        squad.originLng,
+        squad.destLat,
+        squad.destLng,
+        iconColor(squad.teamColor)
+      );
+
+      addLog(
+        squad.teamName,
+        "Visualizzazione mappa",
+        `Centrata la mappa sulla missione della squadra "${squad.teamName}".`
+      );
+    }
+
+    // Funzione per generare dati demo
+    function seedDemoData() {
+      if (
+        state.squads.length &&
+        !confirm("Sono presenti dati salvati. Vuoi aggiungere i dati demo?")
+      )
+        return;
+
+      const demo = [
+        {
+          id: crypto.randomUUID(),
+          teamName: "Modulo Idraulico Delta",
+          teamColor: "red",
+          leaderName: "Luca Ferri",
+          radioCode: "R-17 / Canale 3",
+          members: ["Sara Monti", "Paolo Neri", "Ivan Galli"],
+          training: ["Idrogeologico", "Pompe e drenaggio", "Sicurezza arginale"],
+          vehicles: ["Pick-up 4x4", "Modulo pompa", "Carrello attrezzature"],
+          originLat: 44.8339,
+          originLng: 11.2931,
+          destinationName: "Canale Diversivo Nord",
+          destLat: 44.8548,
+          destLng: 11.3352,
+          status: "In trasferimento",
+          notes: "Verifica livelli e presidio area accesso mezzi",
+          updatedAt: new Date().toISOString(),
+        },
+        {
+          id: crypto.randomUUID(),
+          teamName: "Telecom Alfa",
+          teamColor: "violet",
+          leaderName: "Marta Guidi",
+          radioCode: "TLC-04 / Ponte Mobile",
+          members: ["Diego Rossi", "Andrea Bassi"],
+          training: ["Telecomunicazioni", "Ponti radio", "Coordinamento sala operativa"],
+          vehicles: ["Furgone TLC", "Mast antenna", "Gruppo elettrogeno"],
+          originLat: 44.8261,
+          originLng: 11.2715,
+          destinationName: "Campo base Ovest",
+          destLat: 44.8177,
+          destLng: 11.2299,
+          status: "Pronta",
+          notes: "Predisporre collegamento dati e radio",
+          updatedAt: new Date().toISOString(),
+        },
+        {
+          id: crypto.randomUUID(),
+          teamName: "Logistica Beta",
+          teamColor: "green",
+          leaderName: "Gianni Riva",
+          radioCode: "LOG-12 / Canale 5",
+          members: ["Elena Costa", "Michele Piva", "Nadia Orsi", "Fabio Lodi"],
+          training: ["Logistica", "Allestimento campi", "Distribuzione materiali"],
+          vehicles: ["Autocarro leggero", "Carrello tende", "Muletto"],
+          originLat: 44.8427,
+          originLng: 11.3122,
+          destinationName: "Palestra comunale - punto accoglienza",
+          destLat: 44.8492,
+          destLng: 11.2764,
+          status: "Operativa",
+          notes: "Consegna brandine e kit illuminazione",
+          updatedAt: new Date().toISOString(),
+        },
+      ];
+
+      demo.forEach((s) => {
+        s.route = estimateRoute(s.originLat, s.originLng, s.destLat, s.destLng);
+      });
+
+      state.squads = [...state.squads, ...demo];
+      saveLocal(STORAGE_KEYS.squads, state.squads);
+      renderSquads();
+      addLog("Sistema", "Caricamento demo", "Inserite squadre dimostrative per test operativo della dashboard.");
+    }
+
+    // Eventi e inizializzazione
+    document.addEventListener("DOMContentLoaded", () => {
+      document.querySelectorAll(".nav-btn").forEach((btn) => {
+        btn.addEventListener("click", () => switchPage(btn.dataset.pageTarget));
+      });
+
+      document.getElementById("squadForm").addEventListener("submit", (e) => {
+        e.preventDefault();
+        const squad = formToSquad();
+        if (!squad.teamName) {
+          alert("Inserire il nome della squadra.");
+          return;
+        }
+        saveSquad(squad);
+        renderLivePreview();
+      });
+
+      document
+        .querySelectorAll("#squadForm input, #squadForm textarea, #squadForm select")
+        .forEach((el) => {
+          el.addEventListener("input", () => {
+            renderLivePreview();
+            saveDraft();
+          });
+          el.addEventListener("change", () => {
+            renderLivePreview();
+            saveDraft();
+          });
+        });
+
+      document.getElementById("btnNewForm").addEventListener("click", () => {
+        clearForm();
+        addLog("Sistema", "Nuova scheda", "Azzerato il modulo di inserimento squadra.");
+      });
+
+      document.getElementById("btnDuplicateCurrent").addEventListener("click", () => {
+        const squad = formToSquad();
+        squad.id = crypto.randomUUID();
+        squad.teamName = squad.teamName ? `${squad.teamName} copia` : "Nuova squadra copia";
+        squadToForm(squad, false);
+        addLog(
+          squad.teamName,
+          "Duplicazione scheda",
+          `Duplicata la scheda operativa in una nuova bozza "${squad.teamName}".`
+        );
+      });
+
+      document.getElementById("btnLoadSelected").addEventListener("click", () => {
+        const id = document.getElementById("savedTeamsSelect").value;
+        if (!id) return;
+        editSquad(id);
+      });
+
+      document.getElementById("btnDeleteSelected").addEventListener("click", () => {
+        const id = document.getElementById("savedTeamsSelect").value;
+        if (!id) return;
+        deleteSquad(id);
+      });
+
+      document.getElementById("btnRecallToForm").addEventListener("click", () => {
+        const id = document.getElementById("quickRecallSelect").value;
+        if (!id) return;
+        editSquad(id);
+      });
+
+      document.getElementById("btnCenterSelectedOnMap").addEventListener("click", () => {
+        const id = document.getElementById("quickRecallSelect").value;
+        if (!id) return;
+        focusSquadOnMap(id);
+      });
+
+      document.getElementById("btnFocusMapSquad").addEventListener("click", () => {
+        const id = document.getElementById("mapSquadSelect").value;
+        if (!id) return;
+        focusSquadOnMap(id);
+      });
+
+      document.getElementById("btnResetMapView").addEventListener("click", () => {
+        switchPage("page-mappa");
+        state.map.setView([FINALE_EMILIA.lat, FINALE_EMILIA.lng], 12);
+        addLog("Sistema", "Reset vista mappa", "La mappa è stata ricentrata su Finale Emilia.");
+      });
+
+      document.getElementById("btnDownloadCsv").addEventListener("click", exportCsv);
+      document.getElementById("btnExportCsvFromDashboard").addEventListener("click", () => {
+        switchPage("page-log");
+        exportCsv();
+      });
+
+      document.getElementById("btnCopyCsv").addEventListener("click", async () => {
+        try {
+          await navigator.clipboard.writeText(document.getElementById("csvOutput").value);
+          addLog("Sistema", "Copia CSV", "Copiato negli appunti il testo CSV del log.");
+          alert("CSV copiato negli appunti.");
+        } catch (e) {
+          alert("Impossibile copiare negli appunti.");
+        }
+      });
+
+      document.getElementById("btnBackupJson").addEventListener("click", exportJsonBackup);
+      document.getElementById("btnSeedDemo").addEventListener("click", seedDemoData);
+
+      document.getElementById("btnClearAll").addEventListener("click", () => {
+        const ok = confirm("Vuoi cancellare definitivamente squadre, log e bozza locale?");
+        if (!ok) return;
+        localStorage.removeItem(STORAGE_KEYS.squads);
+        localStorage.removeItem(STORAGE_KEYS.logs);
+        localStorage.removeItem(STORAGE_KEYS.draft);
+        state.squads = [];
+        state.logs = [];
+        clearForm();
+        renderSquads();
+        renderLogs();
+        updateMetrics();
+        addLog("Sistema", "Reset archivio", "L’archivio locale è stato azzerato.");
+      });
+
+      loadDraft();
+      initMap();
+      renderSquads();
+      renderLogs();
+      updateMetrics();
+      renderLivePreview();
+
+      const observer = new IntersectionObserver(
+        (entries) => {
+          entries.forEach((entry) => {
+            if (entry.isIntersecting) entry.target.classList.add("visible");
+          });
+        },
+        { threshold: 0.12 }
+      );
+
+      document.querySelectorAll(".reveal").forEach((el) => observer.observe(el));
+    });
+
+    window.editSquad = editSquad;
+    window.deleteSquad = deleteSquad;
+    window.focusSquadOnMap = focusSquadOnMap;
+  </script>
+</body>
+</html>
